@@ -125,14 +125,14 @@ public class PlayMap extends Dungeon implements Cloneable {
         if(eventLog != null) {
 			Vector cloneEventLog = new Vector(eventLog.size());
             for(int logItem = 0; logItem < eventLog.size(); logItem++){
-                cloneEventLog.setElementAt(eventLog.get(logItem),logItem);
+                cloneEventLog.add(eventLog.get(logItem));
             }
 			clone.eventLog = cloneEventLog;
         }
         if(actionLog != null) {
 			Vector cloneActionLog = new Vector(actionLog.size());
             for(int logItem = 0; logItem < actionLog.size(); logItem++){
-                cloneActionLog.setElementAt(actionLog.get(logItem),logItem);
+                cloneActionLog.add(actionLog.get(logItem));
             }
 			clone.actionLog = cloneActionLog;
         }
