@@ -1,12 +1,17 @@
 package experiment;
 
 import controllers.MCTSController;
+import controllers.PathfindingController;
 import dungeon.Dungeon;
 import dungeon.DungeonLoader;
 import dungeon.play.PlayMap;
+import dungeon.visualization.PlayVisualizer;
 import util.math2d.Matrix2D;
 import util.statics.StatisticUtils;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Scanner;
 import java.io.File;
 
@@ -40,6 +45,7 @@ public class SimulationMode {
             testPlay.startGame();
 
             MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 10);
+            //PathfindingController testAgent = new PathfindingController(testPlay, testPlay.getHero());
 
             int actions = 0;
 
@@ -47,11 +53,24 @@ public class SimulationMode {
                 testPlay.updateGame(testAgent.getNextAction());
                 actions++;
             }
-            updateMetrics(i, testPlay, actions);
+            updateMetrics(i, testPlay, actions);String visitMap = PlayVisualizer.renderHeatmapDungeon(testPlay);
+            //String visitMap = PlayVisualizer.renderFinalDungeon(testPlay);
+            try {
+                writeFile(outputFolder+"/finalRun"+i+"_of_"+mapFile,visitMap);
+            } catch(Exception e){
+                System.out.println(e.toString());
+            }
+
         }
         System.out.println(printMetrics(maxActions));
         System.out.println("---------------------------------------");
         System.out.println(printFullMetrics());
+
+        try {
+            writeFile(outputFolder+"/finalReport_of_"+mapFile.replace("txt","csv"), new String[]{ printMetrics(maxActions), printFullMetrics() });
+        } catch(Exception e){
+            System.out.println(e.toString());
+        }
     }
 
     protected void initMetrics() {
@@ -72,14 +91,23 @@ public class SimulationMode {
         tilesExplored[index] = Matrix2D.count(finishedMap.getAnyVisited());
     }
 
-    protected String printMetrics(int maxActions) {
+    protected String printMetrics(int maxActions){
         String result = "";
-        result += "hpRemaining: " + StatisticUtils.average(hpRemaining) + " (" + StatisticUtils.standardDeviation(hpRemaining) + ")\n";
-        result += "monstersKilled: " + StatisticUtils.average(monstersKilled) + " (" + StatisticUtils.standardDeviation(monstersKilled) + ")\n";
-        result += "treasuresCollected: " + StatisticUtils.average(treasuresCollected) + " (" + StatisticUtils.standardDeviation(treasuresCollected) + ")\n";
-        result += "potionsDrunk: " + StatisticUtils.average(potionsDrunk) + " (" + StatisticUtils.standardDeviation(potionsDrunk) + ")\n";
-        result += "actionsTaken: " + StatisticUtils.average(actionsTaken) + " (" + StatisticUtils.standardDeviation(actionsTaken) + ")\n";
-        result += "tilesExplored: " + StatisticUtils.average(tilesExplored) + " (" + StatisticUtils.standardDeviation(tilesExplored) + ")\n";
+        result+="hpRemaining: "+StatisticUtils.average(hpRemaining)+" ("+StatisticUtils.standardDeviation(hpRemaining)+")\n";
+        result+="monstersKilled: "+StatisticUtils.average(monstersKilled)+" ("+StatisticUtils.standardDeviation(monstersKilled)+")\n";
+        result+="treasuresCollected: "+StatisticUtils.average(treasuresCollected)+" ("+StatisticUtils.standardDeviation(treasuresCollected)+")\n";
+        result+="potionsDrunk: "+StatisticUtils.average(potionsDrunk)+" ("+StatisticUtils.standardDeviation(potionsDrunk)+")\n";
+        result+="actionsTaken: "+StatisticUtils.average(actionsTaken)+" ("+StatisticUtils.standardDeviation(actionsTaken)+")\n";
+        result+="tilesExplored: "+StatisticUtils.average(tilesExplored)+" ("+StatisticUtils.standardDeviation(tilesExplored)+")\n";
+        int timesCompleted = 0;
+        for(int i=0;i<hpRemaining.length;i++){ if(hpRemaining[i]>0 && actionsTaken[i]<maxActions){ timesCompleted++; } }
+        result+="timesCompleted: "+timesCompleted+"\n";
+        int timesDied = 0;
+        for(int i=0;i<hpRemaining.length;i++){ if(hpRemaining[i]<=0){ timesDied++; } }
+        result+="timesDied: "+timesDied+"\n";
+        int timesUncompleted = 0;
+        for(int i=0;i<actionsTaken.length;i++){ if(actionsTaken[i]==maxActions){ timesUncompleted++; } }
+        result+="timesUncompleted: "+timesUncompleted+"\n";
         return result;
     }
 
@@ -104,6 +132,27 @@ public class SimulationMode {
         for(int i=0;i<tilesExplored.length;i++){ result+=tilesExplored[i]+";"; }
         result += "\n";
         return result;
+    }
+
+    public void setOutputFolder(String outputFolder){ this.outputFolder = outputFolder; }
+
+    public static void writeFile(String filename, String line) throws IOException {
+        BufferedWriter outputWriter = null;
+        outputWriter = new BufferedWriter(new FileWriter(filename));
+        outputWriter.write(line);
+        outputWriter.flush();
+        outputWriter.close();
+    }
+
+    public static void writeFile(String filename, String[] lines) throws IOException{
+        BufferedWriter outputWriter = null;
+        outputWriter = new BufferedWriter(new FileWriter(filename));
+        for (int i = 0; i < lines.length; i++) {
+            outputWriter.write(lines[i]);
+            outputWriter.newLine();
+        }
+        outputWriter.flush();
+        outputWriter.close();
     }
 
     public static void main(String[] args) {
