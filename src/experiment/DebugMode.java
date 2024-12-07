@@ -25,7 +25,7 @@ public class DebugMode {
         PlayMap testPlay = new PlayMap(testDungeon);
         testPlay.startGame();
 
-        MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero());
+        MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 1000);
 
         int actions = 0;
 

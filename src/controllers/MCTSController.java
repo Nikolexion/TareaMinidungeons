@@ -3,6 +3,7 @@ package controllers;
 import dungeon.play.GameCharacter;
 import dungeon.play.PlayMap;
 import dungeon.play.Hero;
+import util.math2d.Point2D;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,15 +11,17 @@ import java.util.Random;
 
 public class MCTSController extends Controller {
     private Random random;
+    private int iterations;
 
-    public MCTSController(PlayMap playMap, GameCharacter hero) {
-        super(playMap, hero);
+    public MCTSController(PlayMap playMap, GameCharacter hero, int iterations) {
+        super(playMap, hero, "MCTSController");
         this.random = new Random();
+        this.iterations = iterations;
     }
 
     @Override
     public int getNextAction() {
-        System.out.println("MCTSController.getNextAction()");
+        //System.out.println("MCTSController.getNextAction()");
         return mcts();
     }
 
@@ -28,9 +31,9 @@ public class MCTSController extends Controller {
     }
 
     private int mcts() {
-        System.out.println("MCTS: Starting MCTS");
+        //System.out.println("MCTS: Starting MCTS");
         Node root = new Node(null, -1, map.clone());
-        for (int i = 0; i < 1000; i++) { // Número de iteraciones
+        for (int i = 0; i < iterations; i++) { // Número de iteraciones
             /* System.out.println("MCTS: Iteration " + i); */
             Node node = select(root);
             if (!node.playMap.isGameHalted()) {
@@ -74,17 +77,40 @@ public class MCTSController extends Controller {
         return reward;
     }
 
-    private double calculateReward(PlayMap simulationMap) {
-        Hero hero = simulationMap.getHero();
+    private double calculateReward(PlayMap state) {
+        double reward = 0.0;
+        Hero hero = state.getHero();
         int score = hero.getScore();
-        int hitpoints = hero.getHitpoints();
-        int treasuresCollected = simulationMap.getRewardChars().size() - simulationMap.getDeadRewardArray().length;
-        int monstersKilled = simulationMap.getMonsterChars().size() - simulationMap.getDeadMonsterArray().length;
-        int potionsUsed = simulationMap.getPotionChars().size() - simulationMap.getDeadPotionArray().length;
-    
-        double reward = 100 + score + hitpoints + treasuresCollected * 10 + monstersKilled * 5 + potionsUsed * 2;
-        /* System.out.println("MCTS: Calculated reward: " + reward); */
+        reward += score;
+
+        // Penalizamos por perder vida
+        int hp = hero.getHitpoints();
+        int maxHp = hero.getStartingHitpoints();
+        int healthFraction = maxHp - hp;
+        reward -= (1.0 - healthFraction) * 5.0;
+
+        // Premio mediano por encontrar la salida
+        Point2D posHero = hero.getPosition();
+        Point2D posExit = state.getExit(0);
+        double distanceToExit = manhattan_distance(posHero, posExit);
+        reward += 20.0 / (distanceToExit + 1);
+
+        // Gran premio por encontrar tesoros
+        int totalTreasures = state.rewardChars.size();
+        int actualTreasures = totalTreasures - state.getDeadRewardArray().length;
+        reward += actualTreasures * 10.0;
+
+        int actualMonstersKilled = state.monsterChars.size() - state.getDeadMonsterArray().length;
+        reward += 4 * actualMonstersKilled;
+
+        int actualPotionsUsed = state.monsterChars.size() - state.getDeadPotionArray().length;
+        reward += actualPotionsUsed * 2;
+
         return reward;
+    }
+
+    private double manhattan_distance(Point2D p1, Point2D p2){
+        return Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
     }
 
     private void backpropagate(Node node, double reward) {

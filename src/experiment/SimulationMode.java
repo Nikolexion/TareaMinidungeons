@@ -39,7 +39,7 @@ public class SimulationMode {
         for(int i=0;i<totalRuns;i++){
             testPlay.startGame();
 
-            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero());
+            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 10);
 
             int actions = 0;
 
@@ -104,5 +104,13 @@ public class SimulationMode {
         for(int i=0;i<tilesExplored.length;i++){ result+=tilesExplored[i]+";"; }
         result += "\n";
         return result;
+    }
+
+    public static void main(String[] args) {
+        SimulationMode exp = new SimulationMode();
+        for(int i=0;i<=10;i++){
+            System.out.println("\n--------------\nMAP"+i+"\n--------------\n");
+            exp.runExperiment("./dungeons/map"+i+".txt");
+        }
     }
 }
