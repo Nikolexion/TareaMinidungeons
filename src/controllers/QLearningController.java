@@ -8,11 +8,12 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
-
+/**
+ * Esta clase es el Controller que utiliza Q_Learning. Cabe mencionar que las constantes del Modelo fueron sacadas del paper
+ * "Generative Agents for Player Decision Modeling in Games".
+ */
 public class QLearningController extends Controller {
 
     /* Las constantes para el Q-Learning fueron sacadas del paper:
@@ -22,12 +23,11 @@ public class QLearningController extends Controller {
     private final HashMap<String, double[]> table;
     private final double alpha = 0.5;   //Learning Rate
     private final double gamma = 0.9;   //Discount factor
-    private double epsilon = 1;   //Exploration rate, Greddy La idea es cambiarlo de forma linear igual que en
+    private double epsilon;   //Exploration rate, Greddy
     public static final int N_ACTIONS = 4; // UP(0), RIGTH(1), DOWN(2), LEFT(3), no consideraremos IDLE (no tiene sentido)
     public static final int HEALTH_LEVELS = 4; // 0, 1, 2,3  con 0 poca vida y 3 mucha vida
-    private int LIMIT;
-    private int counter;
     private boolean train;
+    private int[][] distancesFromExit;
 
     Random random;
     private String prevState;
@@ -35,27 +35,29 @@ public class QLearningController extends Controller {
 
     /**
      * Constructor de QLearningController
-     * @param map mapa de juego que se utilizara
+     *
+     * @param map             mapa de juego que se utilizara
      * @param controllingChar Caracter que usara QLearning
-     * @param setTrain Si es verdadero, se entrena el modelo, No se actualiza la tabla.
-     * @param fileName Nombre del archivo con el modelo
-     * @param LIMIT Cantidad de Runs con epsilon = 1
+     * @param setTrain        Si es verdadero, se entrena el modelo, No se actualiza la tabla.
+     * @param fileName        Nombre del archivo con el modelo
      */
-    public QLearningController(PlayMap map, GameCharacter controllingChar, boolean setTrain, String fileName, int LIMIT){
+    public QLearningController(PlayMap map, GameCharacter controllingChar, boolean setTrain, String fileName) {
         super(map, controllingChar, "QlearningController");
         this.random = new Random();
         this.prevState = getCurrentState();
         this.prevAction = PlayMap.IDLE;
-        this.LIMIT = LIMIT * 300; //
-        this.counter = 0;
+
         this.train = setTrain;
 
-        if (train){
+        if (train) {
             this.table = new HashMap<>();
+            epsilon = 1;
+        } else {
+            this.table = getQTableFromCSV(fileName);
+            epsilon = 0;
         }
-        else {
-           this.table = getQTableFromCSV(fileName);
-        }
+
+        distancesFromExit = getDistancesFromExit();
     }
 
     /**
@@ -64,49 +66,48 @@ public class QLearningController extends Controller {
      *
      * @return key de Q_table
      */
-    public String getCurrentState(){
+    public String getCurrentState() {
+        Point2D heroPos = map.getHero().getPosition();
+        int heroX = (int) heroPos.x;
+        int heroY = (int) heroPos.y;
 
-        // Quizas guardar el estado completo no es lo mejor, pero igual así lo hicieron en el paper
-        String result="";
-        for(int y = 0; y< map.getMapSizeY(); y++){
-            for(int x = 0; x< map.getMapSizeX(); x++){
-                if(map.isEmpty(x,y)){
-                    result+=".";
-                } else if(map.isHero(x,y)){
-                    result+="@";
-                } else if(map.isEntrance(x,y)){
-                    result+="E";
-                } else if(map.isExit(x,y)){
-                    result+="X";
-                } else if(map.isMonster(x,y)){
-                    result+="m";
-                } else if(map.isReward(x,y)){
-                    result+="r";
-                } else if(map.isPotion(x,y)){
-                    result+="p";
+        StringBuilder result = new StringBuilder();
+
+        for (int y = heroY - 2; y <= heroY + 2; y++) {
+            for (int x = heroX - 2; x <= heroX + 2; x++) {
+                if (x < 0 || y < 0 || x >= map.getMapSizeX() || y >= map.getMapSizeY()) {
+                    result.append("#"); // Fuera del mapa se considera pared
+                } else if (map.isHero(x, y)) {
+                    result.append("@");
+                } else if (map.isEmpty(x, y)) {
+                    result.append(".");
+                } else if (map.isEntrance(x, y)) {
+                    result.append("E");
+                } else if (map.isExit(x, y)) {
+                    result.append("X");
+                } else if (map.isMonster(x, y)) {
+                    result.append("m");
+                } else if (map.isReward(x, y)) {
+                    result.append("r");
+                } else if (map.isPotion(x, y)) {
+                    result.append("p");
                 } else {
-                    result+="#";
+                    result.append("#"); // Paredes u obstáculos
                 }
             }
         }
-            int hero_health = map.getHero().getHitpoints();
-            short num = -1;
-            if ( 31 <= hero_health ) {
-                num = 3;
-            }else if (15 <= hero_health){
-                num = 2;
-            }else if (6 <= hero_health){
-                num = 1;
-            } else if (0 <= hero_health) {
-                num = 0;
-            }
 
-        result+= num;
-        return result;
+        // Agregar nivel de la salud del héroe al final del estado
+        int heroHealth = map.getHero().getHitpoints();
+        int healthLevel = (heroHealth >= 31) ? 3 : (heroHealth >= 15) ? 2 : (heroHealth >= 6) ? 1 : 0;
+        result.append(healthLevel);
+
+        return result.toString();
     }
 
     /**
      * A partir de un estado, obtenemos los valores Q de la Q_table.
+     *
      * @param state clave del estado en Q_table
      */
     private double[] getQValues(String state) {
@@ -116,6 +117,7 @@ public class QLearningController extends Controller {
 
     /**
      * Obtenemos el valor más grande de una fila de la Q table.
+     *
      * @param qValues fila con valores Q para un estado.
      */
     private int maxQAction(double[] qValues) {
@@ -132,15 +134,16 @@ public class QLearningController extends Controller {
 
     /**
      * Actualiza los valores de la Q table a partir de la formula de Q_Learning.
-     * @param prevState estado previo.
-     * @param action acción hecha en el estado previo.
-     * @param reward recompensa del estado actual.
+     *
+     * @param prevState      estado previo.
+     * @param action         acción hecha en el estado previo.
+     * @param reward         recompensa del estado actual.
      * @param currentQValues Valores Q del estado actual.
      */
     private void updateQTable(String prevState, int action, double reward, double[] currentQValues) {
 
         double[] prevQValues = getQValues(prevState);   // Valores Q, nota: esto devuelve una referencia al array de la
-                                                        // hash table, por lo que si se modifica más adelante.
+        // hash table, por lo que si se modifica más adelante.
         double maxNextQ = currentQValues[maxQAction(currentQValues)]; // Escoger maximo
 
         if (action != -1) {
@@ -150,38 +153,61 @@ public class QLearningController extends Controller {
     }
 
     /**
-     * Funcion que calcula la recompenza del estado actual.
+     * Funcion que calcula la recompensa del estado actual.
      */
     private double computeReward() {
         // nota: Para obtener estado actual usar variable map.
         // TODO: Es una función muy mala, hay que mejorarla !!!!!!
 
-        int x = (int) map.getHero().getPosition().x;
-        int y = (int) map.getHero().getPosition().y;
+        int index = 0;
 
-        int index = map.getMapSizeX() * y + x;
+        if (prevAction == PlayMap.UP) { // UP
+            index = 5 * 1 + 2;
+
+        } else if (prevAction == PlayMap.RIGHT) { // RIGTH
+            index = 5 * 2 + 3;
+
+        } else if (prevAction == PlayMap.DOWN) { // DOWN
+            index = 5 * 3 + 2;
+
+        } else if (prevAction == PlayMap.LEFT) { // LEFT
+            index = 5 * 2 + 1;
+        }
 
         char reward_char = prevState.charAt(index);
+
         // Transformar de char a int
-        int health_level = prevState.charAt(prevState.length()-1) - 48;
+        int health_level = prevState.charAt(prevState.length() - 1) - 48;
         double reward = 0;
 
-        if(reward_char == '.'){ // Vacio
+        if (reward_char == '.') { // Vacio
             reward = -1;
-        } else if(reward_char == 'E'){ // Entrada
+        } else if (reward_char == 'E') { // Entrada
             reward = -1;
-        } else if(reward_char == 'X'){ // Salida
+        } else if (reward_char == 'X') { // Salida
             reward = 1000;
-        } else if(reward_char == 'm'){ // Mounstro
-            reward = - 20 * (HEALTH_LEVELS - health_level);
-        } else if(reward_char == 'r'){ // Recompensa
-            reward =  35;
-        } else if(reward_char == 'p'){ // Poción
-            reward =  5 * (HEALTH_LEVELS - health_level);
+        } else if (reward_char == 'm') { // Mounstro
+            reward = -20 * (HEALTH_LEVELS - health_level);
+        } else if (reward_char == 'r') { // Recompensa
+            reward = 35;
+        } else if (reward_char == 'p') { // Poción
+            reward = 5 * (HEALTH_LEVELS - health_level);
         } else if (reward_char == '@') { // Heroe
             reward = -10;
         } else { // Paredes
             reward = -10;
+        }
+
+        Point2D heroCoord = map.getHero().getPosition();
+        int heroX = (int) heroCoord.x;
+        int heroY = (int) heroCoord.y;
+        int distance = distancesFromExit[heroY][heroX];
+
+        if (distance == -1){
+           reward += -200; // esto no deberia pasar pero porsiacasoo
+            System.out.println("Esto no deberia estar pasando ....");
+        } else {
+            reward -= distance * 2;
         }
 
         // 0, 1,2,3 al tener menos vida quere tener pociones, al tener más vida, querer tener mounstruos,
@@ -200,12 +226,6 @@ public class QLearningController extends Controller {
         double[] qValues = getQValues(currentState);
         int action;
 
-        if(counter < LIMIT) {
-            epsilon = Math.max(0.1, epsilon * 0.99);
-        } else{
-            counter++;
-        }
-
         //  epsilon Greedy, para que derrepente cambie de ruta
         if (random.nextDouble() < epsilon) {
             // Accion random
@@ -215,13 +235,12 @@ public class QLearningController extends Controller {
             action = maxQAction(qValues);
         }
 
-        if (train){
+        if (train) {
             // Actualizar Q-Table
             if (prevState != null) {
                 // Esto se calcula a partir del estado actua
                 double reward = computeReward();
-                String prevStateKey = prevState;
-                updateQTable(prevStateKey, prevAction, reward, qValues);
+                updateQTable(prevState, prevAction, reward, qValues);
             }
         }
 
@@ -229,38 +248,15 @@ public class QLearningController extends Controller {
         prevState = currentState;
         prevAction = action;
 
-        // TODO: PRINT HASH
-        //printHashMap();
-        //System.out.println(table.size());
-
         return action;
     }
 
     /**
-     * Función Debug, esta muestra el contenido de la Hash table, usado para verificar que el algoritmo funciona.
+     * Guarda la Qtable en un archivo .csv
+     *
+     * @param fileName dirección del archivo.
      */
-    public void printHashMap() {
-        System.out.println("HashMap:");
-        for (Map.Entry<String, double[]> entry : table.entrySet()) {
-            String key = entry.getKey();
-            double[] values = entry.getValue();
-
-            // imprme la clave
-            System.out.print(key + " : ");
-
-            // imprime los valores asociados a la clave
-            System.out.print("[");
-            for (int i = 0; i < values.length; i++) {
-                System.out.print(values[i]);
-                if (i < values.length - 1) {
-                    System.out.print(", ");
-                }
-            }
-            System.out.println("]");
-        }
-    }
-
-    public void saveTable(String fileName){
+    public void saveTable(String fileName) {
 
         try (FileWriter writer = new FileWriter(fileName)) {
             // Escribir los encabezados
@@ -286,7 +282,12 @@ public class QLearningController extends Controller {
         }
     }
 
-    public HashMap<String , double []> getQTableFromCSV(String fileName){
+    /**
+     * Carga la Qtable desde un archivo .csv
+     *
+     * @param fileName dirección del archivo.
+     */
+    public HashMap<String, double[]> getQTableFromCSV(String fileName) {
 
         HashMap<String, double[]> hashMap = new HashMap<>();
 
@@ -324,4 +325,74 @@ public class QLearningController extends Controller {
         return hashMap;
     }
 
+    /**
+     * Actualiza el epsilon con la formula epsilon*rate
+     * @param rate ratio de actualización [0, 1]
+     */
+    public void updateEpsilon(double rate) {
+        epsilon = Math.max(0.1, epsilon * rate);
     }
+
+    /**
+     * Función que devuelve una matriz de enteros de las mismas dimensiones del mapa, en esta están marcadas las distancias
+     * desde cada bloque hasta la salida del nivel, las paredes se marcan con -1.
+     * Si tenemos un bloque con coordenadas (x,y) esta guardado en la matriz como array[y][x]
+     */
+    public int[][] getDistancesFromExit(){
+        int mapSizeX = map.getMapSizeX();
+        int mapSizeY = map.getMapSizeY();
+
+        // Crear la matriz de distancias inicializada con -1
+        int[][] distances = new int[mapSizeY][mapSizeX];
+        for (int y = 0; y < mapSizeY; y++) {
+            Arrays.fill(distances[y], -1); // -1 representa paredes u obstáculos
+        }
+        Point2D exitPosition = new Point2D(0,0);
+
+        // Obtener la posición de la salida, se hace así porque la entrada igual se considera una
+        // salida ._.
+        for (int i = 0; i < map.getMapSizeY(); i++){
+            for (int j = 0; j< map.getMapSizeX(); j++){
+                if (map.isExit(j,i) && !map.isEntrance(j,i)){
+                    exitPosition = new Point2D(j,i);
+                }
+            }
+        }
+
+        int exitX = (int) exitPosition.x;
+        int exitY = (int) exitPosition.y;
+
+        // Cola para realizar la búsqueda BFS
+        Queue<Point2D> queue = new LinkedList<>();
+        queue.add(exitPosition);
+        distances[exitY][exitX] = 0; // Distancia desde la salida hasta sí misma es 0
+
+        // Movimientos posibles: UP, RIGHT, DOWN, LEFT
+        int[] dX = {0, 1, 0, -1};
+        int[] dY = {-1, 0, 1, 0};
+
+        // BFS para calcular las distancias
+        while (!queue.isEmpty()) {
+            Point2D current = queue.poll();
+            int currentX = (int) current.x;
+            int currentY = (int) current.y;
+
+            for (int i = 0; i < 4; i++) {
+                int newX = currentX + dX[i];
+                int newY = currentY + dY[i];
+
+                // Validar los límites del mapa y evitar obstáculos o posiciones ya visitadas
+                if (newX >= 0 && newX < mapSizeX && newY >= 0 && newY < mapSizeY && distances[newY][newX] == -1) {
+                    if (map.isEmpty(newX, newY) || map.isHero(newX, newY) || map.isMonster(newX, newY) ||
+                            map.isReward(newX, newY) || map.isPotion(newX, newY)) {
+                        // Actualizar distancia y agregar la celda a la cola
+                        distances[newY][newX] = distances[currentY][currentX] + 1;
+                        queue.add(new Point2D(newX, newY));
+                    }
+                }
+            }
+        }
+
+        return distances;
+    }
+}

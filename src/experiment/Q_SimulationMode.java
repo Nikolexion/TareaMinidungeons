@@ -16,15 +16,33 @@ import dungeon.visualization.PlayVisualizer;
 import util.math2d.Matrix2D;
 import util.statics.StatisticUtils;
 
+/**
+ * Para hacer la simulación con todos los mapas se tuvo que crear un nuevo archivo llamado Q_SimulationMode, esto debido
+ * a la naturaleza del Controller Q_Learning, este se debe entrenar y esto difiere del archivo SimulationMode
+ * que venía en el proyecto. Además, se pueden cargar modelos ya entrenados guardados en la carpeta models encontrada en
+ * la raíz del proyecto (Si no se encuentra creada, se debe crear a mano).
+ *
+ * Ojo: El entrenamiento se encuentra desactivado por defecto, se debe cambiar el parámetro booleano train para activarlo
+ *
+ * Los test se ejecutan con epsilon = 0 y la Q_Table no se modifica.
+ */
 public class Q_SimulationMode {
-    final int testRuns = 20;
+    final int testRuns = 10;
     final int maxActions = 300;
-    final int trainingRuns = 250000;
+    final int trainingRuns = 100000;
     final int numberMaps = 10;
 
-    final boolean train = true;
+    /**
+     * -------------------------------------------IMPORTANTE--------------------------------------------------
+     * Si train: - true: Se entrena el modelo. Se crean o modifican modelos en carpeta models.
+     *           - false: No se entrena el modelo. Se utilizan modelos guardados en carpeta models.
+     * -------------------------------------------IMPORTANTE--------------------------------------------------
+     */
+    final boolean train = false;
+
 
     String outputFolder = "./testResults/";	// this folder needs to already exist, it will not be created by the program
+    String modelsFolder = "./models/";
 
     double[] hpRemaining;
     double[] monstersKilled;
@@ -49,10 +67,13 @@ public class Q_SimulationMode {
         PlayMap testPlay = new PlayMap(testDungeon);
         testPlay.startGame();
 
+        /**
+         * --------------------------------- FASE DE ENTRENAMIENTO ----------------------------------------
+         */
         if (train){
 
             QLearningController testAgent = new QLearningController(testPlay,testPlay.getHero(), true,
-                    "", (int)(trainingRuns * 0.5));
+                    "");
             System.out.println("-----------TRAINING-----------");
             // Training
             for(int i=0;i<trainingRuns;i++){
@@ -62,8 +83,8 @@ public class Q_SimulationMode {
 
                 int actions = 0;
 
-                // Actualizamos el progreso cada 100 runs
-                if (i%10 == 0){
+                // Actualizamos el progreso cada 10 runs
+                if (i%100 == 0){
                     System.out.println("Progreso: " + (double) i / (double) trainingRuns * 100.0 + "%") ;
                 }
                 while(!testPlay.isGameHalted() && actions<maxActions){
@@ -71,18 +92,26 @@ public class Q_SimulationMode {
                     actions++;
                 }
 
+                // Cuando se ejecutaron un cuarto de los entrenamientos (aleatorios), el epsilon empieza a bajar,
+                // esto se ocasiona cuando se completaron el 25% de las Run de entrenamiento.
+                if(i >= trainingRuns * 0.25){
+                   testAgent.updateEpsilon(0.99);
+                }
+
             }
-            testAgent.saveTable("./models/map"+map_number+".txt");
+            testAgent.saveTable(modelsFolder + "map" + map_number + ".txt");
             System.out.println("-----------END TRAINING-----------");
             System.out.println("----------------------------------");
         }
 
-
+        /**
+         * --------------------------------- FASE DE TESTEO ----------------------------------------
+         */
 
         System.out.println("--------------TESTING-------------");
 
         QLearningController testAgent = new QLearningController(testPlay,testPlay.getHero(), false
-                , "./models/map"+map_number+".txt", 0);
+                ,modelsFolder + "map" + map_number + ".txt");
 
         for(int i = 0; i< testRuns; i++){
 
