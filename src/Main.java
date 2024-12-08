@@ -22,7 +22,7 @@ public class Main {
 
                     /* // Ejecutar DebugMode
                     DebugMode debugMode = new DebugMode();
-                    debugMode.runTest(filename);
+                    debugMode.runTest(  filename);
 
                     // Ejecutar CompetitionMode
                     CompetitionMode competitionMode = new CompetitionMode();

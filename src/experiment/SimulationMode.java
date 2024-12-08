@@ -44,7 +44,7 @@ public class SimulationMode {
         for(int i=0;i<totalRuns;i++){
             testPlay.startGame();
 
-            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 10);
+            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 20);
             //PathfindingController testAgent = new PathfindingController(testPlay, testPlay.getHero());
 
             int actions = 0;
@@ -55,11 +55,11 @@ public class SimulationMode {
             }
             updateMetrics(i, testPlay, actions);String visitMap = PlayVisualizer.renderHeatmapDungeon(testPlay);
             //String visitMap = PlayVisualizer.renderFinalDungeon(testPlay);
-            try {
-                writeFile(outputFolder+"/finalRun"+i+"_of_"+mapFile,visitMap);
-            } catch(Exception e){
-                System.out.println(e.toString());
-            }
+            //try {
+            //    writeFile(outputFolder+"/finalRun"+i+"_of_"+mapFile,visitMap);
+            //} catch(Exception e){
+            //    System.out.println(e.toString());
+            //}
 
         }
         System.out.println(printMetrics(maxActions));
@@ -157,7 +157,7 @@ public class SimulationMode {
 
     public static void main(String[] args) {
         SimulationMode exp = new SimulationMode();
-        for(int i=0;i<=10;i++){
+        for(int i=8;i<=8;i++){
             System.out.println("\n--------------\nMAP"+i+"\n--------------\n");
             exp.runExperiment("./dungeons/map"+i+".txt");
         }

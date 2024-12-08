@@ -6,6 +6,7 @@ import dungeon.play.Hero;
 import util.math2d.Point2D;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.Queue;
@@ -15,6 +16,7 @@ public class MCTSController extends Controller {
     private Random random;
     private int iterations;
     private int[][] distanceMatrixMap;
+    private Node root;
 
     /**
      * Constructor de MCTSController.
@@ -27,7 +29,11 @@ public class MCTSController extends Controller {
         this.random = new Random();
         this.iterations = iterations;
 
-        generateDistanceMatrix(playMap);
+        this.root = new Node(null, -1, map.clone());
+
+        //generateDistanceMatrix(playMap);
+        this.distanceMatrixMap = getDistancesFromExit();
+
         for (int i = 0; i < distanceMatrixMap.length; i++) {
             for (int j = 0; j < distanceMatrixMap[i].length; j++) {
                 System.out.print(distanceMatrixMap[i][j] + " "); // Imprime los elementos de la fila en la misma línea
@@ -48,7 +54,21 @@ public class MCTSController extends Controller {
     @Override
     public int getNextAction() {
         //System.out.println("MCTSController.getNextAction()");
-        return mcts();
+        int action = mcts();
+        Node chosen = null;
+        for (Node child: this.root.children) {
+            if (child.action == action) {
+                chosen = child;
+                break;
+            }
+        }
+        if (chosen == null) {
+            System.out.println("¡OJO! No se encontro un hijo de la raiz con la acción entragada");
+        }
+        else {
+            this.root = chosen;
+        }
+        return action;
     }
 
     /**
@@ -103,6 +123,64 @@ public class MCTSController extends Controller {
         }
     }
 
+    public int[][] getDistancesFromExit() {
+        int mapSizeX = map.getMapSizeX();
+        int mapSizeY = map.getMapSizeY();
+
+        // Crear la matriz de distancias inicializada con -1
+        int[][] distances = new int[mapSizeY][mapSizeX];
+        for (int y = 0; y < mapSizeY; y++) {
+            Arrays.fill(distances[y], -1); // -1 representa paredes u obstáculos
+        }
+        Point2D exitPosition = new Point2D(0, 0);
+
+        // Obtener la posición de la salida, se hace así porque la entrada igual se considera una
+        // salida ._.
+        for (int i = 0; i < map.getMapSizeY(); i++) {
+            for (int j = 0; j < map.getMapSizeX(); j++) {
+                if (map.isExit(j, i) && !map.isEntrance(j, i)) {
+                    exitPosition = new Point2D(j, i);
+                }
+            }
+        }
+
+        int exitX = (int) exitPosition.x;
+        int exitY = (int) exitPosition.y;
+
+        // Cola para realizar la búsqueda BFS
+        Queue<Point2D> queue = new LinkedList<>();
+        queue.add(exitPosition);
+        distances[exitY][exitX] = 0; // Distancia desde la salida hasta sí misma es 0
+
+        // Movimientos posibles: UP, RIGHT, DOWN, LEFT
+        int[] dX = {0, 1, 0, -1};
+        int[] dY = {-1, 0, 1, 0};
+
+        // BFS para calcular las distancias
+        while (!queue.isEmpty()) {
+            Point2D current = queue.poll();
+            int currentX = (int) current.x;
+            int currentY = (int) current.y;
+
+            for (int i = 0; i < 4; i++) {
+                int newX = currentX + dX[i];
+                int newY = currentY + dY[i];
+
+                // Validar los límites del mapa y evitar obstáculos o posiciones ya visitadas
+                if (newX >= 0 && newX < mapSizeX && newY >= 0 && newY < mapSizeY && distances[newY][newX] == -1) {
+                    if (map.isEmpty(newX, newY) || map.isHero(newX, newY) || map.isMonster(newX, newY) ||
+                            map.isReward(newX, newY) || map.isPotion(newX, newY)) {
+                        // Actualizar distancia y agregar la celda a la cola
+                        distances[newY][newX] = distances[currentY][currentX] + 1;
+                        queue.add(new Point2D(newX, newY));
+                    }
+                }
+            }
+        }
+
+        return distances;
+    }
+
     /**
      * Función auxiliar booleana para la matriz de distancias, verifica si la casilla actual es colisión.
      * @param playMap Mapa actual
@@ -125,10 +203,9 @@ public class MCTSController extends Controller {
      */
     private int mcts() {
         //System.out.println("MCTS: Starting MCTS");
-        Node root = new Node(null, -1, map.clone());
         for (int i = 0; i < iterations; i++) { // Número de iteraciones
             /* System.out.println("MCTS: Iteration " + i); */
-            Node node = select(root);
+            Node node = select(this.root);
             if (!node.playMap.isGameHalted()) {
                 expand(node);
                 Node child = node.children.get(random.nextInt(node.children.size()));
@@ -136,9 +213,8 @@ public class MCTSController extends Controller {
                 backpropagate(child, reward);
             }
         }
-        int bestAction = bestAction(root);
+        return bestAction(root);
         /* System.out.println("MCTS: Best action selected: " + bestAction); */
-        return bestAction;
     }
 
     /**
@@ -178,7 +254,9 @@ public class MCTSController extends Controller {
      */
     private double simulate(Node node) {
         PlayMap simulationMap = node.playMap.clone();
-        while (!simulationMap.isGameHalted()) {
+        int i = 0;
+        int max_i = 20;
+        while ((!simulationMap.isGameHalted()) && i < max_i) {
             int action;
             Point2D position;
             do {
@@ -187,6 +265,7 @@ public class MCTSController extends Controller {
             } while (!simulationMap.isValidMove(position)); // Verifica validez antes de ejecutar
 
             simulationMap.updateGame(action); // Solo realiza la acción si es válida
+            i++;
         }
         return calculateReward(simulationMap);
     }
@@ -202,18 +281,21 @@ public class MCTSController extends Controller {
      * @return Recompensa por el estado actual
      */
     private double calculateReward(PlayMap state) {
-        double reward = 0.0;
-        Point2D heroPosition = state.getHero().getPosition();
-        Point2D exitPosition = state.getExit(1); // Suponiendo que la salida principal es la de índice 0
-        //System.out.println(exitPosition);
-        double distanceToExit = manhattan_distance(heroPosition, exitPosition);
-        reward += 5.0/ (distanceToExit+1);
-        if (distanceToExit == 0) {
-            reward += 100;
-        }
+        Point2D heroCoord = state.getHero().getPosition();
+        int heroX = (int) heroCoord.x;
+        int heroY = (int) heroCoord.y;
+        int distance = distanceMatrixMap[heroY][heroX];
 
-        // Recompensa inversamente proporcional a la distancia
-        // Cuanto más cerca, mayor la recompensa (evitamos división por 0 sumando 1)
+        double reward = 100;
+        if (distance == -1){
+            reward += -200; // esto no deberia pasar pero porsiacasoo
+            System.out.println("Esto no deberia estar pasando ....");
+        } else if (distance == 0) {
+            reward += 10000;
+            System.out.println("Esto SÍ deberia estar pasando ....");
+        } else {
+            reward -= distance * 2;
+        }
         return reward;
     }
 
