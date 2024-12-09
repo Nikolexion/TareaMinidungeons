@@ -29,6 +29,7 @@ public class CompetitionMode {
 		"controllers.ZombieController",
 		"controllers.RoombaController",
 		"controllers.PathfindingController",
+		"controllers.MCTSController",
 	};
 
 	double[][] hpRemaining;
