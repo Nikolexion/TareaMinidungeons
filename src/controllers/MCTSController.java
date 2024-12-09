@@ -32,16 +32,16 @@ public class MCTSController extends Controller {
         this.root = new Node(null, -1, map.clone());
 
         //generateDistanceMatrix(playMap);
-        this.distanceMatrixMap = getDistancesFromExit();
+        distanceMatrixMap = getDistancesFromExit();
 
-        for (int i = 0; i < distanceMatrixMap.length; i++) {
-            for (int j = 0; j < distanceMatrixMap[i].length; j++) {
-                System.out.print(distanceMatrixMap[i][j] + " "); // Imprime los elementos de la fila en la misma línea
-            }
-            System.out.println(); // Salto de línea después de cada fila
-        }
-        System.out.println("-------------------");
-        System.out.println(playMap.toASCII());
+        //for (int i = 0; i < distanceMatrixMap.length; i++) {
+        //    for (int j = 0; j < distanceMatrixMap[i].length; j++) {
+        //        System.out.print(distanceMatrixMap[i][j] + " "); // Imprime los elementos de la fila en la misma línea
+        //    }
+        //    System.out.println(); // Salto de línea después de cada fila
+        //}
+        //System.out.println("-------------------");
+        //System.out.println(playMap.toASCII());
 
 
         //System.out.println(playMap.toASCII());
@@ -168,8 +168,12 @@ public class MCTSController extends Controller {
 
                 // Validar los límites del mapa y evitar obstáculos o posiciones ya visitadas
                 if (newX >= 0 && newX < mapSizeX && newY >= 0 && newY < mapSizeY && distances[newY][newX] == -1) {
-                    if (map.isEmpty(newX, newY) || map.isHero(newX, newY) || map.isMonster(newX, newY) ||
-                            map.isReward(newX, newY) || map.isPotion(newX, newY)) {
+                    if (map.isEmpty(newX, newY)
+                            || map.isHero(newX, newY)
+                            || map.isMonster(newX, newY)
+                            || map.isReward(newX, newY)
+                            || map.isPotion(newX, newY)
+                    ) {
                         // Actualizar distancia y agregar la celda a la cola
                         distances[newY][newX] = distances[currentY][currentX] + 1;
                         queue.add(new Point2D(newX, newY));
@@ -255,7 +259,7 @@ public class MCTSController extends Controller {
     private double simulate(Node node) {
         PlayMap simulationMap = node.playMap.clone();
         int i = 0;
-        int max_i = 20;
+        int max_i = 50;
         while ((!simulationMap.isGameHalted()) && i < max_i) {
             int action;
             Point2D position;
@@ -284,18 +288,19 @@ public class MCTSController extends Controller {
         Point2D heroCoord = state.getHero().getPosition();
         int heroX = (int) heroCoord.x;
         int heroY = (int) heroCoord.y;
-        int distance = distanceMatrixMap[heroY][heroX];
 
-        double reward = 100;
-        if (distance == -1){
-            reward += -200; // esto no deberia pasar pero porsiacasoo
-            System.out.println("Esto no deberia estar pasando ....");
-        } else if (distance == 0) {
-            reward += 10000;
-            System.out.println("Esto SÍ deberia estar pasando ....");
-        } else {
-            reward -= distance * 2;
-        }
+        double D = distanceMatrixMap[heroY][heroX];
+        double D_mult = -3;
+
+        double W_mult = 50;
+        double W = 0;
+        if (D == 0) {W = 1;}
+
+        double L = state.getHero().getHitpoints();
+        double L_mult = 1;
+
+        double reward = D_mult * D + W_mult * W + L_mult * L;
+
         return reward;
     }
 

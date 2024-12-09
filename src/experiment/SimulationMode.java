@@ -42,15 +42,25 @@ public class SimulationMode {
         Dungeon testDungeon = DungeonLoader.loadAsciiDungeon(asciiMap);
         PlayMap testPlay = new PlayMap(testDungeon);
         for(int i=0;i<totalRuns;i++){
+
+            System.out.println("------ Simulación " + i + " ------");
+
             testPlay.startGame();
 
-            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 20);
+            MCTSController testAgent = new MCTSController(testPlay, testPlay.getHero(), 10);
             //PathfindingController testAgent = new PathfindingController(testPlay, testPlay.getHero());
 
             int actions = 0;
 
             while(!testPlay.isGameHalted() && actions < maxActions){
-                testPlay.updateGame(testAgent.getNextAction());
+                int action = testAgent.getNextAction();
+                String action_name = "";
+                if (action == 0) {action_name = "UP";}
+                else if (action == 1) {action_name = "RIGHT";}
+                else if (action == 2) {action_name = "DOWN";}
+                else if (action == 3) {action_name = "LEFT";}
+                //System.out.println("ACTION: " + action_name);
+                testPlay.updateGame(action);
                 actions++;
             }
             updateMetrics(i, testPlay, actions);String visitMap = PlayVisualizer.renderHeatmapDungeon(testPlay);
@@ -157,7 +167,7 @@ public class SimulationMode {
 
     public static void main(String[] args) {
         SimulationMode exp = new SimulationMode();
-        for(int i=8;i<=8;i++){
+        for(int i=0; i<=10; i++){
             System.out.println("\n--------------\nMAP"+i+"\n--------------\n");
             exp.runExperiment("./dungeons/map"+i+".txt");
         }
